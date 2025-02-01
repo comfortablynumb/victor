@@ -1,0 +1,7 @@
+services:
+  statsd:
+    image: statsd/statsd:v0.10.2
+    ports:
+      - "8125:8125/udp"
+    volumes:
+      - "${PWD}/config/docker-statsd.js:/usr/src/app/config.js"

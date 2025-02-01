@@ -1,0 +1,5 @@
+metrics-addr: ":8127"
+backends:
+  - statsdaemon
+statsdaemon:
+  address: 127.0.0.1:8125
