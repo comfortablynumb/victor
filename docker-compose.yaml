@@ -1,7 +1,24 @@
 services:
-  statsd:
-    image: statsd/statsd:v0.10.2
+  telegraf:
+    image: telegraf:1.31.3
+    restart: unless-stopped
     ports:
-      - "8125:8125/udp"
+      - '8125:8125/udp'
     volumes:
-      - "${PWD}/config/docker-statsd.js:/usr/src/app/config.js"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "${PWD}/docker/telegraf/config.toml:/etc/telegraf/telegraf.conf"
+  grafana:
+    image: grafana/grafana:11.5.0
+    restart: unless-stopped
+    ports:
+     - '3000:3000'
+    volumes:
+      - "${PWD}/docker/grafana/provisioning:/etc/grafana/provisioning"
+      - "${PWD}/docker/grafana/config:/etc/grafana/my-config"
+    environment:
+      - GF_PATHS_CONFIG=/etc/grafana/my-config/custom.ini
+  influxdb:
+    image: influxdb:1.11.8
+    restart: unless-stopped
+    ports:
+      - '8086:8086'

@@ -1,0 +1,12 @@
+[[inputs.docker]]
+  endpoint = "unix:///var/run/docker.sock"
+
+[[inputs.statsd]]
+  protocol = "udp"
+
+[[outputs.influxdb]]
+  urls = ["http://influxdb:8086"]
+  database = "test"
+  username = "admin"
+  password = "admin"
+
