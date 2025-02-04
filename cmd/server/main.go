@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -28,7 +27,6 @@ import (
 	"github.com/atlassian/gostatsd/pkg/statsd"
 	"github.com/atlassian/gostatsd/pkg/transport"
 	"github.com/comfortablynumb/victor/internal/backend/wrapper"
-	"github.com/comfortablynumb/victor/internal/config"
 )
 
 const (
@@ -129,7 +127,6 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 	}
 	// Backends
 	backendNames := v.GetStringSlice(gostatsd.ParamBackends)
-	rateLimitedBackends := v.GetStringSlice(config.ParamRateLimitedBackends)
 	backendsList := make([]gostatsd.Backend, 0, len(backendNames))
 
 	for _, backendName := range backendNames {
@@ -140,11 +137,7 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 			return nil, errBackend
 		}
 
-		if slices.Contains(rateLimitedBackends, backendName) {
-			logrus.Infof("This backend will be rate limited: %s", backendName)
-
-			backend = wrapper.NewBackendWrapper(backend)
-		}
+		backend = wrapper.NewBackendWrapper(backend, v)
 
 		backendsList = append(backendsList, backend)
 		runnables = gostatsd.MaybeAppendRunnable(runnables, backend)

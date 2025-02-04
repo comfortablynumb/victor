@@ -3,9 +3,14 @@ package wrapper
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/atlassian/gostatsd"
+	"github.com/comfortablynumb/victor/internal/config"
 	"github.com/comfortablynumb/victor/internal/hyperloglog"
+	"github.com/comfortablynumb/victor/internal/util"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 // Structs
@@ -14,25 +19,17 @@ type BackendWrapper struct {
 	backend                 gostatsd.Backend
 	hyperLogLogByMetricName map[string]*hyperloglog.HyperLogLog
 	mutex                   *sync.RWMutex
+	limit                   uint64
+	clearAfterDuration      time.Duration
+	lastClearTime           time.Time
+	enableRateLimit         bool
 }
 
 func (b *BackendWrapper) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
 	metrics := metricMap.AsMetrics()
 
-	// Check if we need to drop some metrics
-
-	for _, metric := range metrics {
-		if _, valid := b.Estimate(metric.Name, metric.Tags.SortedString(), 1000); !valid {
-			if metric.Type == gostatsd.COUNTER {
-				metricMap.Counters.Delete(metric.Name)
-			} else if metric.Type == gostatsd.GAUGE {
-				metricMap.Gauges.Delete(metric.Name)
-			} else if metric.Type == gostatsd.TIMER {
-				metricMap.Timers.Delete(metric.Name)
-			} else if metric.Type == gostatsd.SET {
-				metricMap.Sets.Delete(metric.Name)
-			}
-		}
+	if b.enableRateLimit {
+		b.rateLimit(metricMap, metrics)
 	}
 
 	b.backend.SendMetricsAsync(ctx, metricMap, callback)
@@ -46,14 +43,40 @@ func (b *BackendWrapper) Name() string {
 	return b.backend.Name()
 }
 
-func (b *BackendWrapper) AddMetricTags(metricName string, tags string) {
+func (b *BackendWrapper) rateLimit(metricMap *gostatsd.MetricMap, metrics []*gostatsd.Metric) {
+	// @TODO: Check if this method is "goroutine safe"
+
+	if time.Since(b.lastClearTime) > b.clearAfterDuration {
+		b.hyperLogLogByMetricName = make(map[string]*hyperloglog.HyperLogLog)
+		b.lastClearTime = time.Now()
+	}
+
+	// Check if we need to drop some metrics
+
+	for _, metric := range metrics {
+		if _, valid := b.estimate(metric.Name, metric.Tags.SortedString(), b.limit); !valid {
+			if metric.Type == gostatsd.COUNTER {
+				metricMap.Counters.Delete(metric.Name)
+			} else if metric.Type == gostatsd.GAUGE {
+				metricMap.Gauges.Delete(metric.Name)
+			} else if metric.Type == gostatsd.TIMER {
+				metricMap.Timers.Delete(metric.Name)
+			} else if metric.Type == gostatsd.SET {
+				metricMap.Sets.Delete(metric.Name)
+			}
+		}
+	}
+}
+
+func (b *BackendWrapper) addMetricTags(metricName string, tags string) {
 	b.mutex.Lock()
+
 	defer b.mutex.Unlock()
 
 	b.hyperLogLogByMetricName[metricName].Insert(tags)
 }
 
-func (b *BackendWrapper) Estimate(metricName string, tags string, limit uint64) (uint64, bool) {
+func (b *BackendWrapper) estimate(metricName string, tags string, limit uint64) (uint64, bool) {
 	b.mutex.RLock()
 
 	val, found := b.hyperLogLogByMetricName[metricName]
@@ -61,7 +84,7 @@ func (b *BackendWrapper) Estimate(metricName string, tags string, limit uint64) 
 	b.mutex.RUnlock()
 
 	if !found {
-		b.AddNewMetric(metricName, tags)
+		b.addNewMetric(metricName, tags)
 
 		return 0, true
 	}
@@ -77,7 +100,7 @@ func (b *BackendWrapper) Estimate(metricName string, tags string, limit uint64) 
 	return res, false
 }
 
-func (b *BackendWrapper) AddNewMetric(metricName string, tags string) {
+func (b *BackendWrapper) addNewMetric(metricName string, tags string) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
@@ -88,12 +111,40 @@ func (b *BackendWrapper) AddNewMetric(metricName string, tags string) {
 
 // Static functions
 
-func NewBackendWrapper(backendToWrap gostatsd.Backend) *BackendWrapper {
-	hyperLogLogByMetricName := make(map[string]*hyperloglog.HyperLogLog, 100)
+func NewBackendWrapper(
+	backendToWrap gostatsd.Backend,
+	v *viper.Viper,
+) *BackendWrapper {
+	// Backend specific config
+
+	v = util.GetSubViper(v, backendToWrap.Name())
+
+	// Rate limit config for this backend
+
+	v = util.GetSubViper(v, config.ParamRateLimit)
+
+	v.SetDefault(config.ParamEnabled, false)
+	v.SetDefault(config.ParamLimit, config.DefaultLimit)
+	v.SetDefault(config.ParamClearAfterDuration, config.DefaultClearAfterDuration)
+
+	limit := v.GetUint64(config.ParamLimit)
+	clearAfterDuration := v.GetDuration(config.ParamClearAfterDuration)
+	enableRateLimit := v.GetBool(config.ParamEnabled)
+
+	var hyperLogLogByMetricName map[string]*hyperloglog.HyperLogLog
+
+	if enableRateLimit {
+		logrus.Info("Rate limit is enabled for backend: ", backendToWrap.Name())
+
+		hyperLogLogByMetricName = make(map[string]*hyperloglog.HyperLogLog, 100)
+	}
 
 	return &BackendWrapper{
 		backend:                 backendToWrap,
 		hyperLogLogByMetricName: hyperLogLogByMetricName,
 		mutex:                   &sync.RWMutex{},
+		limit:                   limit,
+		clearAfterDuration:      clearAfterDuration,
+		enableRateLimit:         enableRateLimit,
 	}
 }
