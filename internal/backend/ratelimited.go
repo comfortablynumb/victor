@@ -120,8 +120,15 @@ func (b *RateLimitedBackend) estimate(metricName string, tags string, limit uint
 
 	if res < limit {
 		val.Insert(tags)
+
 		return res, true
 	}
+
+	logrus.WithField("metricName", metricName).
+		WithField("tags", tags).
+		WithField("res", res).
+		WithField("limit", limit).
+		Info("Metric Blocked")
 
 	return res, false
 }
@@ -144,10 +151,6 @@ func NewRateLimitedBackend(
 	// Rate limits configs
 
 	v = util.GetSubViper(v, config.ParamRateLimit)
-
-	// Rate limit configs for this backend
-
-	v = util.GetSubViper(v, backendToRateLimit.Name())
 
 	v.SetDefault(config.ParamLimit, config.DefaultLimit)
 	v.SetDefault(config.ParamClearAfterDuration, config.DefaultClearAfterDuration)

@@ -13,7 +13,7 @@ func NewWrappedBackend(backend gostatsd.Backend, v *viper.Viper) gostatsd.Backen
 	rateLimitViper := util.GetSubViper(v, config.ParamRateLimit)
 
 	if rateLimitViper.GetBool(config.ParamEnabled) {
-		return NewRateLimitedBackend(backend, rateLimitViper)
+		return NewRateLimitedBackend(backend, v)
 	}
 
 	return backend

@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
@@ -13,9 +14,20 @@ import (
 
 func main() {
 	addr := "127.0.0.1:8127"
+	metricCount := "1000"
 
 	if len(os.Args) > 1 {
 		addr = os.Args[1]
+	}
+
+	if os.Getenv("METRIC_COUNT") != "" {
+		metricCount = os.Getenv("METRIC_COUNT")
+	}
+
+	metricCountInt, err := strconv.Atoi(metricCount)
+
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	fmt.Printf(" - Starting test metrics sender against: %s\n", addr)
@@ -52,7 +64,7 @@ func main() {
 			return
 		default:
 			statsdClient.Inc(
-				fmt.Sprintf("test.metrics.sender.%d", rand.Intn(1000)),
+				fmt.Sprintf("test.metrics.sender.%d", rand.Intn(metricCountInt)),
 				int64(rand.Intn(10000)),
 				1.0,
 				statsd.Tag{"some_tag", "some_value"},
