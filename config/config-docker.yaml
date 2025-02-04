@@ -5,5 +5,5 @@ statsdaemon:
   address: telegraf:8125
   rate-limit:
     enabled: true
-    limit: 10000
+    limit: 100
     clear-after-duration: 1h

@@ -26,10 +26,8 @@ type BackendWrapper struct {
 }
 
 func (b *BackendWrapper) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
-	metrics := metricMap.AsMetrics()
-
 	if b.enableRateLimit {
-		b.rateLimit(metricMap, metrics)
+		b.rateLimit(metricMap)
 	}
 
 	b.backend.SendMetricsAsync(ctx, metricMap, callback)
@@ -43,7 +41,9 @@ func (b *BackendWrapper) Name() string {
 	return b.backend.Name()
 }
 
-func (b *BackendWrapper) rateLimit(metricMap *gostatsd.MetricMap, metrics []*gostatsd.Metric) {
+func (b *BackendWrapper) rateLimit(metricMap *gostatsd.MetricMap) {
+	metrics := metricMap.AsMetrics()
+
 	// @TODO: Check if this method is "goroutine safe"
 
 	if time.Since(b.lastClearTime) > b.clearAfterDuration {
@@ -146,5 +146,6 @@ func NewBackendWrapper(
 		limit:                   limit,
 		clearAfterDuration:      clearAfterDuration,
 		enableRateLimit:         enableRateLimit,
+		lastClearTime:           time.Now(),
 	}
 }
