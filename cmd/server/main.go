@@ -9,14 +9,12 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"runtime"
+	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/axiomhq/hyperloglog"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -29,6 +27,8 @@ import (
 	"github.com/atlassian/gostatsd/pkg/cloudproviders"
 	"github.com/atlassian/gostatsd/pkg/statsd"
 	"github.com/atlassian/gostatsd/pkg/transport"
+	"github.com/comfortablynumb/victor/internal/backend/wrapper"
+	"github.com/comfortablynumb/victor/internal/config"
 )
 
 const (
@@ -87,15 +87,6 @@ func run(v *viper.Viper) error {
 	ctx, cancelFunc := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancelFunc()
 
-	go func() {
-		for {
-			select {
-			case <-time.After(5 * time.Second):
-				PrintMemUsage()
-			}
-		}
-	}()
-
 	logrus.Infof("Server started on %s", v.GetString(gostatsd.ParamMetricsAddr))
 
 	if err := s.Run(ctx); err != nil && err != context.Canceled {
@@ -138,7 +129,9 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 	}
 	// Backends
 	backendNames := v.GetStringSlice(gostatsd.ParamBackends)
+	rateLimitedBackends := v.GetStringSlice(config.ParamRateLimitedBackends)
 	backendsList := make([]gostatsd.Backend, 0, len(backendNames))
+
 	for _, backendName := range backendNames {
 		logrus.Infof("Initializing backend: %s", backendName)
 
@@ -146,8 +139,14 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 		if errBackend != nil {
 			return nil, errBackend
 		}
-		backendsList = append(backendsList, NewBackendWrapper(backend))
+
+		if slices.Contains(rateLimitedBackends, backendName) {
+			backend = wrapper.NewBackendWrapper(backend)
+		}
+
+		backendsList = append(backendsList, backend)
 		runnables = gostatsd.MaybeAppendRunnable(runnables, backend)
+
 	}
 	// Percentiles
 	pt, err := getPercentiles(v.GetStringSlice(gostatsd.ParamPercentThreshold))
@@ -293,133 +292,4 @@ func InitViper(v *viper.Viper, subViperName string) {
 	v.SetEnvPrefix(EnvPrefix)
 	v.SetTypeByDefaultValue(true)
 	v.AutomaticEnv()
-}
-
-type HyperLogLog struct {
-	sketch *hyperloglog.Sketch
-	mutex  *sync.RWMutex
-}
-
-func (h *HyperLogLog) Insert(tags string) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	h.sketch.Insert([]byte(tags))
-}
-
-func (h *HyperLogLog) Estimate() uint64 {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-
-	return h.sketch.Estimate()
-}
-
-type BackendWrapper struct {
-	backend                 gostatsd.Backend
-	hyperLogLogByMetricName map[string]*HyperLogLog
-	mutex                   *sync.RWMutex
-}
-
-func (b *BackendWrapper) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
-	metrics := metricMap.AsMetrics()
-
-	// Check if we need to drop some metrics
-
-	for _, metric := range metrics {
-		if _, valid := b.Estimate(metric.Name, metric.Tags.SortedString(), 1000); !valid {
-			if metric.Type == gostatsd.COUNTER {
-				metricMap.Counters.Delete(metric.Name)
-			} else if metric.Type == gostatsd.GAUGE {
-				metricMap.Gauges.Delete(metric.Name)
-			} else if metric.Type == gostatsd.TIMER {
-				metricMap.Timers.Delete(metric.Name)
-			} else if metric.Type == gostatsd.SET {
-				metricMap.Sets.Delete(metric.Name)
-			}
-		}
-	}
-
-	b.backend.SendMetricsAsync(ctx, metricMap, callback)
-}
-
-func (b *BackendWrapper) SendEvent(ctx context.Context, event *gostatsd.Event) error {
-	return b.backend.SendEvent(ctx, event)
-}
-
-func (b *BackendWrapper) Name() string {
-	return b.backend.Name()
-}
-
-func (b *BackendWrapper) AddMetricTags(metricName string, tags string) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
-	b.hyperLogLogByMetricName[metricName].Insert(tags)
-}
-
-func (b *BackendWrapper) Estimate(metricName string, tags string, limit uint64) (uint64, bool) {
-	b.mutex.RLock()
-
-	val, found := b.hyperLogLogByMetricName[metricName]
-
-	b.mutex.RUnlock()
-
-	if !found {
-		b.AddNewMetric(metricName, tags)
-
-		return 0, true
-	}
-
-	res := val.Estimate()
-
-	if res < limit {
-		val.Insert(tags)
-
-		return res, true
-	}
-
-	return res, false
-}
-
-func (b *BackendWrapper) AddNewMetric(metricName string, tags string) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
-	hyperLogLog := NewHyperLogLog(tags)
-
-	b.hyperLogLogByMetricName[metricName] = hyperLogLog
-}
-
-func NewBackendWrapper(backend gostatsd.Backend) *BackendWrapper {
-	hyperLogLogByMetricName := make(map[string]*HyperLogLog, 100)
-
-	return &BackendWrapper{
-		backend:                 backend,
-		hyperLogLogByMetricName: hyperLogLogByMetricName,
-		mutex:                   &sync.RWMutex{},
-	}
-}
-
-func NewHyperLogLog(tags string) *HyperLogLog {
-	sketch := hyperloglog.New14()
-
-	sketch.Insert([]byte(tags))
-
-	return &HyperLogLog{
-		sketch: sketch,
-		mutex:  &sync.RWMutex{},
-	}
-}
-
-// PrintMemUsage outputs the current, total and OS memory being used. As well as the number
-// of garage collection cycles completed.
-func PrintMemUsage() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	logrus.Infof("Alloc = %v MiB - TotalAlloc = %v MiB - Sys = %v MiB - NumGC = %v", bToMb(m.Alloc), bToMb(m.TotalAlloc), bToMb(m.Sys), m.NumGC)
-}
-
-func bToMb(b uint64) uint64 {
-	return b / 1024 / 1024
 }
