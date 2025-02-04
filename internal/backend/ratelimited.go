@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/atlassian/gostatsd"
@@ -16,15 +17,22 @@ import (
 // Structs
 
 type RateLimitedBackend struct {
+	lastClearTime int64
+
 	backend                 gostatsd.Backend
+	backendRunner           gostatsd.Runner
+	backendMetricsRunner    gostatsd.MetricsRunner
 	hyperLogLogByMetricName map[string]*hyperloglog.HyperLogLog
 	mutex                   *sync.RWMutex
 	limit                   uint64
 	clearAfterDuration      time.Duration
-	lastClearTime           time.Time
 }
 
 func (b *RateLimitedBackend) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
+	if atomic.LoadInt64(&b.lastClearTime) < time.Now().Add(-b.clearAfterDuration).Unix() {
+		b.clearHyperLogLogs()
+	}
+
 	b.rateLimit(metricMap)
 
 	b.backend.SendMetricsAsync(ctx, metricMap, callback)
@@ -34,28 +42,57 @@ func (b *RateLimitedBackend) SendEvent(ctx context.Context, event *gostatsd.Even
 	return b.backend.SendEvent(ctx, event)
 }
 
+func (b *RateLimitedBackend) Run(ctx context.Context) {
+	if b.backendRunner != nil {
+		b.backendRunner.Run(ctx)
+	}
+}
+
+func (b *RateLimitedBackend) RunMetricsContext(ctx context.Context) {
+	if b.backendMetricsRunner != nil {
+		b.backendMetricsRunner.RunMetricsContext(ctx)
+	}
+}
+
 func (b *RateLimitedBackend) Name() string {
 	return b.backend.Name()
 }
 
-func (b *RateLimitedBackend) rateLimit(metricMap *gostatsd.MetricMap) {
-	metrics := metricMap.AsMetrics()
+func (b *RateLimitedBackend) clearHyperLogLogs() {
+	atomic.StoreInt64(&b.lastClearTime, time.Now().Unix())
 
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	b.hyperLogLogByMetricName = make(map[string]*hyperloglog.HyperLogLog)
+}
+
+func (b *RateLimitedBackend) rateLimit(metricMap *gostatsd.MetricMap) {
 	// Check if we need to drop some metrics
 
-	for _, metric := range metrics {
-		if _, valid := b.estimate(metric.Name, metric.Tags.SortedString(), b.limit); !valid {
-			if metric.Type == gostatsd.COUNTER {
-				metricMap.Counters.Delete(metric.Name)
-			} else if metric.Type == gostatsd.GAUGE {
-				metricMap.Gauges.Delete(metric.Name)
-			} else if metric.Type == gostatsd.TIMER {
-				metricMap.Timers.Delete(metric.Name)
-			} else if metric.Type == gostatsd.SET {
-				metricMap.Sets.Delete(metric.Name)
-			}
+	// :: Counters
+
+	metricMap.Counters.Each(func(metricName string, tagsKey string, c gostatsd.Counter) {
+		if _, valid := b.estimate(metricName, tagsKey, b.limit); !valid {
+			metricMap.Counters.Delete(metricName)
 		}
-	}
+	})
+
+	// :: Gauges
+
+	metricMap.Gauges.Each(func(metricName string, tagsKey string, g gostatsd.Gauge) {
+		if _, valid := b.estimate(metricName, tagsKey, b.limit); !valid {
+			metricMap.Gauges.Delete(metricName)
+		}
+	})
+
+	// :: Timers
+
+	metricMap.Timers.Each(func(metricName string, tagsKey string, t gostatsd.Timer) {
+		if _, valid := b.estimate(metricName, tagsKey, b.limit); !valid {
+			metricMap.Timers.Delete(metricName)
+		}
+	})
 }
 
 func (b *RateLimitedBackend) addMetricTags(metricName string, tags string) {
@@ -106,13 +143,12 @@ func NewRateLimitedBackend(
 ) *RateLimitedBackend {
 	// Rate limits configs
 
-	v = util.GetSubViper(v, "rate-limits")
+	v = util.GetSubViper(v, config.ParamRateLimit)
 
 	// Rate limit configs for this backend
 
 	v = util.GetSubViper(v, backendToRateLimit.Name())
 
-	v.SetDefault(config.ParamEnabled, false)
 	v.SetDefault(config.ParamLimit, config.DefaultLimit)
 	v.SetDefault(config.ParamClearAfterDuration, config.DefaultClearAfterDuration)
 
@@ -120,14 +156,30 @@ func NewRateLimitedBackend(
 	clearAfterDuration := v.GetDuration(config.ParamClearAfterDuration)
 	hyperLogLogByMetricName := make(map[string]*hyperloglog.HyperLogLog, 100)
 
-	logrus.Infof("Rate limit is enabled for backend: %s - Limit: %d - Clear after duration: %s", backendToRateLimit.Name(), limit, clearAfterDuration)
+	var backendRunner gostatsd.Runner
+	var backendMetricsRunner gostatsd.MetricsRunner
+
+	if castedBackendRunner, ok := backendToRateLimit.(gostatsd.Runner); ok {
+		backendRunner = castedBackendRunner
+	}
+
+	if castedBackendMetricsRunner, ok := backendToRateLimit.(gostatsd.MetricsRunner); ok {
+		backendMetricsRunner = castedBackendMetricsRunner
+	}
+
+	logrus.WithField("backend", backendToRateLimit.Name()).
+		WithField(config.ParamLimit, limit).
+		WithField(config.ParamClearAfterDuration, clearAfterDuration).
+		Info("Rate limit is enabled for backend")
 
 	return &RateLimitedBackend{
 		backend:                 backendToRateLimit,
+		backendRunner:           backendRunner,
+		backendMetricsRunner:    backendMetricsRunner,
 		hyperLogLogByMetricName: hyperLogLogByMetricName,
 		mutex:                   &sync.RWMutex{},
 		limit:                   limit,
 		clearAfterDuration:      clearAfterDuration,
-		lastClearTime:           time.Now(),
+		lastClearTime:           time.Now().Unix(),
 	}
 }

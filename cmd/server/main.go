@@ -132,7 +132,7 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 	backendsList := make([]gostatsd.Backend, 0, len(backendNames))
 
 	for _, backendName := range backendNames {
-		logrus.Infof("Initializing backend: %s", backendName)
+		logrus.WithField("backend", backendName).Info("Initializing backend")
 
 		backend, errBackend := backends.InitBackend(backendName, v, logger, pool)
 		if errBackend != nil {
