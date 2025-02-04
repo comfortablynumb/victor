@@ -124,12 +124,6 @@ func (b *RateLimitedBackend) estimate(metricName string, tags string, limit uint
 		return res, true
 	}
 
-	logrus.WithField("metricName", metricName).
-		WithField("tags", tags).
-		WithField("res", res).
-		WithField("limit", limit).
-		Info("Metric Blocked")
-
 	return res, false
 }
 

@@ -14,7 +14,7 @@ import (
 
 func main() {
 	addr := "127.0.0.1:8127"
-	metricCount := "1000"
+	metricCount := "50"
 
 	if len(os.Args) > 1 {
 		addr = os.Args[1]
