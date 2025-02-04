@@ -134,7 +134,7 @@ func NewBackendWrapper(
 	var hyperLogLogByMetricName map[string]*hyperloglog.HyperLogLog
 
 	if enableRateLimit {
-		logrus.Info("Rate limit is enabled for backend: ", backendToWrap.Name())
+		logrus.Infof("Rate limit is enabled for backend: %s - Limit: %d - Clear after duration: %s", backendToWrap.Name(), limit, clearAfterDuration)
 
 		hyperLogLogByMetricName = make(map[string]*hyperloglog.HyperLogLog, 100)
 	}
