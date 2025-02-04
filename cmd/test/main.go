@@ -57,7 +57,7 @@ func main() {
 				statsd.Tag{"some_tag_6", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
 			)
 
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 
 		}
 	}

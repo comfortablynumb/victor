@@ -141,6 +141,8 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 		}
 
 		if slices.Contains(rateLimitedBackends, backendName) {
+			logrus.Infof("This backend will be rate limited: %s", backendName)
+
 			backend = wrapper.NewBackendWrapper(backend)
 		}
 
