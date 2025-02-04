@@ -26,7 +26,9 @@ import (
 	"github.com/atlassian/gostatsd/pkg/cloudproviders"
 	"github.com/atlassian/gostatsd/pkg/statsd"
 	"github.com/atlassian/gostatsd/pkg/transport"
-	"github.com/comfortablynumb/victor/internal/backend/wrapper"
+
+	mybackend "github.com/comfortablynumb/victor/internal/backend"
+	"github.com/comfortablynumb/victor/internal/util"
 )
 
 const (
@@ -137,7 +139,7 @@ func constructServer(v *viper.Viper) (*statsd.Server, error) {
 			return nil, errBackend
 		}
 
-		backend = wrapper.NewBackendWrapper(backend, v)
+		backend = mybackend.NewWrappedBackend(backend, util.GetSubViper(v, backend.Name()))
 
 		backendsList = append(backendsList, backend)
 		runnables = gostatsd.MaybeAppendRunnable(runnables, backend)

@@ -1,11 +1,9 @@
 metrics-addr: ":8127"
-heartbeat-enabled: true
 backends:
   - statsdaemon
 statsdaemon:
   address: 127.0.0.1:8125
-rate-limits:
-  statsdaemon:
+  rate-limit:
     enabled: true
     limit: 100
     clear-after-duration: 1h

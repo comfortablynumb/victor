@@ -1,4 +1,4 @@
-package wrapper
+package backend
 
 import (
 	"context"
@@ -15,33 +15,30 @@ import (
 
 // Structs
 
-type BackendWrapper struct {
+type RateLimitedBackend struct {
 	backend                 gostatsd.Backend
 	hyperLogLogByMetricName map[string]*hyperloglog.HyperLogLog
 	mutex                   *sync.RWMutex
 	limit                   uint64
 	clearAfterDuration      time.Duration
 	lastClearTime           time.Time
-	enableRateLimit         bool
 }
 
-func (b *BackendWrapper) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
-	if b.enableRateLimit {
-		b.rateLimit(metricMap)
-	}
+func (b *RateLimitedBackend) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
+	b.rateLimit(metricMap)
 
 	b.backend.SendMetricsAsync(ctx, metricMap, callback)
 }
 
-func (b *BackendWrapper) SendEvent(ctx context.Context, event *gostatsd.Event) error {
+func (b *RateLimitedBackend) SendEvent(ctx context.Context, event *gostatsd.Event) error {
 	return b.backend.SendEvent(ctx, event)
 }
 
-func (b *BackendWrapper) Name() string {
+func (b *RateLimitedBackend) Name() string {
 	return b.backend.Name()
 }
 
-func (b *BackendWrapper) rateLimit(metricMap *gostatsd.MetricMap) {
+func (b *RateLimitedBackend) rateLimit(metricMap *gostatsd.MetricMap) {
 	metrics := metricMap.AsMetrics()
 
 	// Check if we need to drop some metrics
@@ -61,7 +58,7 @@ func (b *BackendWrapper) rateLimit(metricMap *gostatsd.MetricMap) {
 	}
 }
 
-func (b *BackendWrapper) addMetricTags(metricName string, tags string) {
+func (b *RateLimitedBackend) addMetricTags(metricName string, tags string) {
 	b.mutex.Lock()
 
 	defer b.mutex.Unlock()
@@ -69,7 +66,7 @@ func (b *BackendWrapper) addMetricTags(metricName string, tags string) {
 	b.hyperLogLogByMetricName[metricName].Insert(tags)
 }
 
-func (b *BackendWrapper) estimate(metricName string, tags string, limit uint64) (uint64, bool) {
+func (b *RateLimitedBackend) estimate(metricName string, tags string, limit uint64) (uint64, bool) {
 	b.mutex.RLock()
 
 	val, found := b.hyperLogLogByMetricName[metricName]
@@ -92,7 +89,7 @@ func (b *BackendWrapper) estimate(metricName string, tags string, limit uint64) 
 	return res, false
 }
 
-func (b *BackendWrapper) addNewMetric(metricName string, tags string) {
+func (b *RateLimitedBackend) addNewMetric(metricName string, tags string) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
@@ -103,17 +100,17 @@ func (b *BackendWrapper) addNewMetric(metricName string, tags string) {
 
 // Static functions
 
-func NewBackendWrapper(
-	backendToWrap gostatsd.Backend,
+func NewRateLimitedBackend(
+	backendToRateLimit gostatsd.Backend,
 	v *viper.Viper,
-) *BackendWrapper {
+) *RateLimitedBackend {
 	// Rate limits configs
 
 	v = util.GetSubViper(v, "rate-limits")
 
 	// Rate limit configs for this backend
 
-	v = util.GetSubViper(v, backendToWrap.Name())
+	v = util.GetSubViper(v, backendToRateLimit.Name())
 
 	v.SetDefault(config.ParamEnabled, false)
 	v.SetDefault(config.ParamLimit, config.DefaultLimit)
@@ -121,23 +118,16 @@ func NewBackendWrapper(
 
 	limit := v.GetUint64(config.ParamLimit)
 	clearAfterDuration := v.GetDuration(config.ParamClearAfterDuration)
-	enableRateLimit := v.GetBool(config.ParamEnabled)
+	hyperLogLogByMetricName := make(map[string]*hyperloglog.HyperLogLog, 100)
 
-	var hyperLogLogByMetricName map[string]*hyperloglog.HyperLogLog
+	logrus.Infof("Rate limit is enabled for backend: %s - Limit: %d - Clear after duration: %s", backendToRateLimit.Name(), limit, clearAfterDuration)
 
-	if enableRateLimit {
-		logrus.Infof("Rate limit is enabled for backend: %s - Limit: %d - Clear after duration: %s", backendToWrap.Name(), limit, clearAfterDuration)
-
-		hyperLogLogByMetricName = make(map[string]*hyperloglog.HyperLogLog, 100)
-	}
-
-	return &BackendWrapper{
-		backend:                 backendToWrap,
+	return &RateLimitedBackend{
+		backend:                 backendToRateLimit,
 		hyperLogLogByMetricName: hyperLogLogByMetricName,
 		mutex:                   &sync.RWMutex{},
 		limit:                   limit,
 		clearAfterDuration:      clearAfterDuration,
-		enableRateLimit:         enableRateLimit,
 		lastClearTime:           time.Now(),
 	}
 }

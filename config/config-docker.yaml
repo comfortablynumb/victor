@@ -3,8 +3,7 @@ backends:
   - statsdaemon
 statsdaemon:
   address: telegraf:8125
-rate-limits:
-  statsdaemon:
+  rate-limit:
     enabled: true
     limit: 100
     clear-after-duration: 1h
