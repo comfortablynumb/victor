@@ -34,6 +34,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	fmt.Println(" - Statsd client created - Sending metrics...")
+
 	defer func() {
 		statsdClient.Close()
 	}()
@@ -51,7 +53,7 @@ func main() {
 		default:
 			statsdClient.Inc(
 				fmt.Sprintf("test.metrics.sender.%d", rand.Intn(1000)),
-				int64(rand.Intn(1000)),
+				int64(rand.Intn(10000)),
 				1.0,
 				statsd.Tag{"some_tag", "some_value"},
 				statsd.Tag{"some_tag_2", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
@@ -61,7 +63,7 @@ func main() {
 				statsd.Tag{"some_tag_6", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
 			)
 
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 
 		}
 	}

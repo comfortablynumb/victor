@@ -44,13 +44,6 @@ func (b *BackendWrapper) Name() string {
 func (b *BackendWrapper) rateLimit(metricMap *gostatsd.MetricMap) {
 	metrics := metricMap.AsMetrics()
 
-	// @TODO: Check if this method is "goroutine safe"
-
-	if time.Since(b.lastClearTime) > b.clearAfterDuration {
-		b.hyperLogLogByMetricName = make(map[string]*hyperloglog.HyperLogLog)
-		b.lastClearTime = time.Now()
-	}
-
 	// Check if we need to drop some metrics
 
 	for _, metric := range metrics {
@@ -93,7 +86,6 @@ func (b *BackendWrapper) estimate(metricName string, tags string, limit uint64) 
 
 	if res < limit {
 		val.Insert(tags)
-
 		return res, true
 	}
 
@@ -115,13 +107,13 @@ func NewBackendWrapper(
 	backendToWrap gostatsd.Backend,
 	v *viper.Viper,
 ) *BackendWrapper {
-	// Backend specific config
+	// Rate limits configs
+
+	v = util.GetSubViper(v, "rate-limits")
+
+	// Rate limit configs for this backend
 
 	v = util.GetSubViper(v, backendToWrap.Name())
-
-	// Rate limit config for this backend
-
-	v = util.GetSubViper(v, config.ParamRateLimit)
 
 	v.SetDefault(config.ParamEnabled, false)
 	v.SetDefault(config.ParamLimit, config.DefaultLimit)
