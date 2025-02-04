@@ -4,7 +4,6 @@
 [[inputs.statsd]]
   protocol = "udp"
   datadog_extensions = true
-  service_address = ":8125"
 
 [[outputs.influxdb]]
   urls = ["http://influxdb:8086"]
