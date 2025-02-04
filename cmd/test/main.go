@@ -12,10 +12,16 @@ import (
 )
 
 func main() {
-	fmt.Println(" - Starting test metrics sender")
+	addr := "127.0.0.1:8127"
+
+	if len(os.Args) > 1 {
+		addr = os.Args[1]
+	}
+
+	fmt.Printf(" - Starting test metrics sender against: %s\n", addr)
 
 	config := &statsd.ClientConfig{
-		Address: "127.0.0.1:8127",
+		Address: addr,
 		Prefix:  "test-client",
 	}
 
@@ -27,8 +33,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Println(" - Statsd client created")
 
 	defer func() {
 		statsdClient.Close()
