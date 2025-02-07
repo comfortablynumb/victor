@@ -26,7 +26,7 @@ type RateLimitedBackend struct {
 	mutex                   *sync.RWMutex
 	limit                   uint64
 	clearAfterDuration      time.Duration
-	limitByTag              map[string]int64
+	limitByTag              map[string]int
 }
 
 func (b *RateLimitedBackend) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
@@ -171,10 +171,10 @@ func NewRateLimitedBackend(
 
 	limit := v.GetUint64(config.ParamDefaultLimit)
 	clearAfterDuration := v.GetDuration(config.ParamClearAfterDuration)
-	limitByTag, err := util.ConvertMap[string, int64](v.GetStringMap(config.ParamLimitByTag))
+	limitByTag, err := util.ConvertMap[string, int](v.GetStringMap(config.ParamLimitByTag))
 
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to convert limit-by-tag to map[string]uint64")
+		logrus.WithError(err).Fatal("Failed to convert limit-by-tag to map[string]int")
 	}
 
 	hyperLogLogByMetricName := make(map[string]*hyperloglog.HyperLogLog, 100)
