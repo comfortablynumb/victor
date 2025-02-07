@@ -8,15 +8,15 @@
 
 ## Overview
 
-Victor is a statsd server that can rate limit metrics based on their cardinality (unique combinations of metric name and tags). By limiting high-cardinality metrics, Victor can dramatically reduce costs in your metrics infrastructure. High-cardinality metrics, if left unchecked, can lead to exponential growth in storage requirements and processing overhead.
+Victor is a statsd server (using the one from [Attlasian](https://github.com/atlassian/gostatsd)) that can rate limit metrics based on their cardinality (unique combinations of metric name and tags). By limiting high-cardinality metrics, Victor can dramatically reduce costs in your metrics infrastructure. High-cardinality metrics, if left unchecked, can lead to exponential growth in storage requirements and processing overhead.
 
 Key features:
 
 - Acts as a statsd proxy server that can forward metrics to other statsd-compatible backends
 - Rate limits metrics based on unique tag combinations using HyperLogLog for cardinality estimation
 - Significant cost savings by preventing cardinality explosions in your metrics backend
-- Configurable rate limits per metric name
-- Automatic clearing of cardinality tracking after a configurable duration
+- Configurable rate limits using a default limit and, optionally, a limit per metric name
+- Automatic clearing of cardinality tracking after a configurable duration. This is useful to control costs in SaaS that measure costs by metric + tag cardinality in a fixed time window (e.g. 1 hour)
 - Support for multiple backend types
 
 ## How it works
