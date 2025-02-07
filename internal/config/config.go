@@ -5,13 +5,14 @@ import "time"
 // Constants
 
 const (
-	ParamBackends           = "backends"
-	ParamRateLimit          = "rate-limit"
-	
+	ParamBackends  = "backends"
+	ParamRateLimit = "rate-limit"
+
 	// Rate Limit Configs
-	
+
 	ParamClearAfterDuration = "clear-after-duration"
-	ParamLimit              = "limit"
+	ParamDefaultLimit       = "default-limit"
+	ParamLimitByTag         = "limit-by-tag"
 	ParamEnabled            = "enabled"
 
 	DefaultClearAfterDuration = 1 * time.Hour

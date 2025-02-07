@@ -5,5 +5,5 @@ statsdaemon:
   address: 127.0.0.1:8125
   rate-limit:
     enabled: true
-    limit: 1000
+    default-limit: 1000
     clear-after-duration: 1h

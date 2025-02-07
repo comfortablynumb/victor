@@ -64,11 +64,24 @@ func main() {
 			return
 		default:
 			statsdClient.Inc(
-				fmt.Sprintf("test.metrics.sender.%d", rand.Intn(metricCountInt)),
+				fmt.Sprintf("test.metrics.inc.%d", rand.Intn(metricCountInt)),
 				int64(rand.Intn(10000)),
 				1.0,
 				statsd.Tag{"some_tag", "some_value"},
 				statsd.Tag{"some_tag_2", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
+				statsd.Tag{"some_tag_3", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
+				statsd.Tag{"some_tag_4", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
+				statsd.Tag{"some_tag_5", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
+				statsd.Tag{"some_tag_6", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
+			)
+
+			statsdClient.TimingDuration(
+				fmt.Sprintf("test.metrics.timing.%d", rand.Intn(metricCountInt)),
+				time.Duration(rand.Intn(10000))*time.Millisecond,
+				1.0,
+				statsd.Tag{"some_tag", "some_value"},
+				statsd.Tag{"some_tag_2", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
+
 				statsd.Tag{"some_tag_3", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
 				statsd.Tag{"some_tag_4", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
 				statsd.Tag{"some_tag_5", fmt.Sprintf("some_value_%d", rand.Intn(10000))},
