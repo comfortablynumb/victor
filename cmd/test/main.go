@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	addr := "127.0.0.1:8127"
+	addr := "127.0.0.1:8125"
 	metricCount := "50"
 
 	if len(os.Args) > 1 {
@@ -34,7 +34,6 @@ func main() {
 
 	config := &statsd.ClientConfig{
 		Address: addr,
-		Prefix:  "test-client",
 	}
 
 	// Now create the client

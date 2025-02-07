@@ -62,5 +62,16 @@ services:
       - "your-config.yaml:/app/config/config.yaml"
 ```
 
+## Simulate Metrics Locally
+
+You can use the following command to simulate metrics locally against Victor (or any other statsd-compatible server):
+
+```bash
+go run cmd/test/main.go 127.0.0.1:8125
+```
+
+Being the first argument the address of the statsd server you want to send metrics to.
+
+
 
 

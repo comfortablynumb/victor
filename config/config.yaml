@@ -1,2 +1,2 @@
-metrics-addr: ":8127"
+metrics-addr: ":8125"
 backends: []
