@@ -34,7 +34,7 @@ metrics-addr: ":8125"
 backends:
   - statsdaemon
 statsdaemon:
-  address: yourstatsdserver:8125
+  address: "your-statsd-server:8125"
   rate-limit:
     enabled: true
     default-limit: 1000
@@ -57,7 +57,7 @@ services:
     image: ironedge/victor:latest
     restart: unless-stopped
     ports:
-      - '8125:8125/udp'
+      - "8125:8125/udp"
     volumes:
       - "your-config.yaml:/app/config/config.yaml"
 ```
