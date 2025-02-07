@@ -7,7 +7,7 @@ statsdaemon:
     enabled: true
     default-limit: 1000
     clear-after-duration: 1h
-    limit-by-tag:
+    limit-by-metric-name:
       test.metrics.inc.1: 500
       test.metrics.timing.1: 250
 

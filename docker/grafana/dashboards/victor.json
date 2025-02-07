@@ -520,7 +520,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "test-client_test_metrics_sender_0",
+          "measurement": "test_metrics_inc_1",
           "orderByTime": "ASC",
           "policy": "default",
           "refId": "A",

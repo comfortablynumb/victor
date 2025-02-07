@@ -26,7 +26,7 @@ type RateLimitedBackend struct {
 	mutex                   *sync.RWMutex
 	limit                   uint64
 	clearAfterDuration      time.Duration
-	limitByTag              map[string]int
+	limitByMetricName       map[string]int
 }
 
 func (b *RateLimitedBackend) SendMetricsAsync(ctx context.Context, metricMap *gostatsd.MetricMap, callback gostatsd.SendCallback) {
@@ -76,8 +76,8 @@ func (b *RateLimitedBackend) rateLimit(metricMap *gostatsd.MetricMap) {
 	metricMap.Counters.Each(func(metricName string, tagsKey string, c gostatsd.Counter) {
 		limit := b.limit
 
-		if _, ok := b.limitByTag[metricName]; ok {
-			limit = uint64(b.limitByTag[metricName])
+		if _, ok := b.limitByMetricName[metricName]; ok {
+			limit = uint64(b.limitByMetricName[metricName])
 		}
 
 		if _, valid := b.estimate(metricName, tagsKey, limit); !valid {
@@ -90,8 +90,8 @@ func (b *RateLimitedBackend) rateLimit(metricMap *gostatsd.MetricMap) {
 	metricMap.Gauges.Each(func(metricName string, tagsKey string, g gostatsd.Gauge) {
 		limit := b.limit
 
-		if _, ok := b.limitByTag[metricName]; ok {
-			limit = uint64(b.limitByTag[metricName])
+		if _, ok := b.limitByMetricName[metricName]; ok {
+			limit = uint64(b.limitByMetricName[metricName])
 		}
 
 		if _, valid := b.estimate(metricName, tagsKey, limit); !valid {
@@ -104,8 +104,8 @@ func (b *RateLimitedBackend) rateLimit(metricMap *gostatsd.MetricMap) {
 	metricMap.Timers.Each(func(metricName string, tagsKey string, t gostatsd.Timer) {
 		limit := b.limit
 
-		if _, ok := b.limitByTag[metricName]; ok {
-			limit = uint64(b.limitByTag[metricName])
+		if _, ok := b.limitByMetricName[metricName]; ok {
+			limit = uint64(b.limitByMetricName[metricName])
 		}
 
 		if _, valid := b.estimate(metricName, tagsKey, limit); !valid {
@@ -167,11 +167,11 @@ func NewRateLimitedBackend(
 
 	v.SetDefault(config.ParamDefaultLimit, config.DefaultLimit)
 	v.SetDefault(config.ParamClearAfterDuration, config.DefaultClearAfterDuration)
-	v.SetDefault(config.ParamLimitByTag, make(map[string]uint64))
+	v.SetDefault(config.ParamLimitByMetricName, make(map[string]int))
 
 	limit := v.GetUint64(config.ParamDefaultLimit)
 	clearAfterDuration := v.GetDuration(config.ParamClearAfterDuration)
-	limitByTag, err := util.ConvertMap[string, int](v.GetStringMap(config.ParamLimitByTag))
+	limitByMetricName, err := util.ConvertMap[string, int](v.GetStringMap(config.ParamLimitByMetricName))
 
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to convert limit-by-tag to map[string]int")
@@ -203,7 +203,7 @@ func NewRateLimitedBackend(
 		mutex:                   &sync.RWMutex{},
 		limit:                   limit,
 		clearAfterDuration:      clearAfterDuration,
-		limitByTag:              limitByTag,
+		limitByMetricName:       limitByMetricName,
 		lastClearTime:           time.Now().Unix(),
 	}
 }

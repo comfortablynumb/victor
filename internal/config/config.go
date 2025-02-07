@@ -12,7 +12,7 @@ const (
 
 	ParamClearAfterDuration = "clear-after-duration"
 	ParamDefaultLimit       = "default-limit"
-	ParamLimitByTag         = "limit-by-tag"
+	ParamLimitByMetricName  = "limit-by-metric-name"
 	ParamEnabled            = "enabled"
 
 	DefaultClearAfterDuration = 1 * time.Hour
