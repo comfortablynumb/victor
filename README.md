@@ -44,7 +44,7 @@ statsdaemon:
 2. Run Victor:
 
 ```bash
-victor --config-path config/config.yaml
+docker run -ti -p "8125:8125/udp" -v ./config/config.yaml:/app/config/config.yaml ironedge/victor:latest
 ```
 
 ## Docker Image
