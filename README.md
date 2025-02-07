@@ -30,10 +30,11 @@ You can use Victor either as a standalone server or as a proxy to send metrics t
 1. Create a configuration file. For example, `config/config.yaml`:
 
 ```yaml
+metrics-addr: ":8125"
 backends:
   - statsdaemon
 statsdaemon:
-  address: 127.0.0.1:8125
+  address: yourstatsdserver:8125
   rate-limit:
     enabled: true
     default-limit: 1000
@@ -56,7 +57,7 @@ services:
     image: ironedge/victor:latest
     restart: unless-stopped
     ports:
-      - '8127:8127/udp'
+      - '8125:8125/udp'
     volumes:
       - "your-config.yaml:/app/config/config.yaml"
 ```
